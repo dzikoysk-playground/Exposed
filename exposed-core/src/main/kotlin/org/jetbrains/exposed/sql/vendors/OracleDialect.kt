@@ -317,7 +317,7 @@ internal object OracleFunctionProvider : FunctionProvider() {
         )
     }
 
-    override fun merge(dest: Table, source: Table, transaction: Transaction, whenBranches: List<MergeBaseStatement.WhenBranchData>, on: Op<Boolean>): String {
+    override fun merge(dest: Table, source: Table, transaction: Transaction, whenBranches: List<MergeBaseStatement.WhenBranchData>, on: Op<Boolean>?): String {
         validateMergeCommandWhenBranches(whenBranches)
         return super.merge(dest, source, transaction, whenBranches, on)
     }
