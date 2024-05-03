@@ -2,8 +2,10 @@ package org.jetbrains.exposed.dao
 
 import org.jetbrains.exposed.dao.id.IdTable
 import org.jetbrains.exposed.sql.Column
+import org.jetbrains.exposed.sql.Expression
 import org.jetbrains.exposed.sql.LazySizedIterable
 import org.jetbrains.exposed.sql.SizedIterable
+import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.emptySized
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import kotlin.properties.ReadOnlyProperty
@@ -99,6 +101,10 @@ class Referrers<ParentID : Comparable<ParentID>, in Parent : Entity<ParentID>, C
     val factory: EntityClass<ChildID, Child>,
     val cache: Boolean
 ) : ReadOnlyProperty<Parent, SizedIterable<Child>> {
+
+    /** The list of columns and their [SortOrder] for ordering referred entities in on-to-many relationship. */
+    private var orderByExpressions: MutableList<Pair<Expression<*>, SortOrder>> = mutableListOf()
+
     init {
         reference.referee ?: error("Column $reference is not a reference")
 
@@ -111,7 +117,12 @@ class Referrers<ParentID : Comparable<ParentID>, in Parent : Entity<ParentID>, C
         val value = thisRef.run { reference.referee<REF>()!!.lookup() }
         if (thisRef.id._value == null || value == null) return emptySized()
 
-        val query = { factory.find { reference eq value } }
+        val query = {
+            @Suppress("SpreadOperator")
+            factory
+                .find { reference eq value }
+                .orderBy(*orderByExpressions.toTypedArray())
+        }
         val transaction = TransactionManager.currentOrNull()
         return when {
             transaction == null -> thisRef.getReferenceFromCache(reference)
@@ -122,6 +133,21 @@ class Referrers<ParentID : Comparable<ParentID>, in Parent : Entity<ParentID>, C
             }
             else -> query()
         }
+    }
+
+    /** Modifies this reference to sort entities according to the specified [order]. **/
+    infix fun orderBy(order: Pair<Expression<*>, SortOrder>): Referrers<ParentID, Parent, ChildID, Child, REF> = apply {
+        this.orderByExpressions.add(order)
+    }
+
+    /** Modifies this reference to sort entities based on multiple columns as specified in [order]. **/
+    infix fun orderBy(order: List<Pair<Expression<*>, SortOrder>>): Referrers<ParentID, Parent, ChildID, Child, REF> = apply {
+        this.orderByExpressions.addAll(order)
+    }
+
+    /** Modifies this reference to sort entities by a column specified in [expression] using ascending order. **/
+    infix fun orderBy(expression: Expression<*>): Referrers<ParentID, Parent, ChildID, Child, REF> = apply {
+        this.orderByExpressions.add(expression to SortOrder.ASC)
     }
 }
 
